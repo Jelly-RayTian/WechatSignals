@@ -1,0 +1,31 @@
+# Dependencies and generated builds
+node_modules/
+dist/
+.DS_Store
+native/keychain-helper
+native/image-ocr
+
+# Local secrets, WeChat data, chat exports and caches
+.env*
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.log
+*.pem
+*.key
+*.p12
+*.pfx
+work/
+logs/
+cache/
+transcripts/
+exports/
+evaluation/results/
+
+# Locally installed native runtimes and speech models
+vendor/greenbubbles/greenbubbles
+vendor/greenbubbles/greenbubbles-acquire
+vendor/speech/ffmpeg
+vendor/speech/whisper-cli
+vendor/speech/*.bin

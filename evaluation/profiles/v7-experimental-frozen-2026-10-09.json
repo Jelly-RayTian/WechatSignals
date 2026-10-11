@@ -1,0 +1,17 @@
+{
+  "id": "v7-experimental-frozen-2026-10-09",
+  "validationStatus": "experimental-unvalidated",
+  "scope": "Observable behavior rules and authored synthetic references; not psychological ground truth",
+  "changePolicy": "New algorithm changes require a new version, rationale and predeclared evaluation; do not update this manifest merely to make drift tests pass. Existing holdout is exposed and cannot certify generalization.",
+  "sha256": {
+    "src/infrastructure/jev-behaviors.ts": "4c25d004729cbf809722629856ddf01cfb3f0249ea23fc1b2e1cf1fcb04a3cd0",
+    "src/application/signal-episodes.ts": "2155ed50bfd968d7b32fbbb461a20990e20913416e69ac5ca81007bfd9f16ffe",
+    "src/application/batches.ts": "7a6324166e6616e53673c7cb27b07935380e5760ef0a452d19b72a998f4b8b16",
+    "src/infrastructure/jev.ts": "ba3a37c2b3c26f47b516e2a38a59e3e0bcdb13be40c170381614e1c2c7288b91",
+    "src/infrastructure/jev-evidence.ts": "cc81d06ffca7967f1c6041f3518592bbd0f4dc24405052cebb338cef86c9aca7",
+    "src/infrastructure/jev-rubric.ts": "9d1661d00913b13a7ba09e176b64263d97e4607a0048733e80b898316431a8b4",
+    "src/application/sanitizer.ts": "53798a1e90558388a8a12eea81be6286131fc37e0c9ba5b9aa98a85be867cf83",
+    "evaluation/corpus.ts": "4a8e53b07de72fa0fe3911c3c626f7a5680d47334254f227f3a6a10da33bb2a8",
+    "evaluation/scoring.ts": "435615573c6fde7a02f7b784fc9d7e4263c9b2a95d9e0d74ca5656975a26e52d"
+  }
+}

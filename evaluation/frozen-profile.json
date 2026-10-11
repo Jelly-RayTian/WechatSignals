@@ -1,0 +1,21 @@
+{
+  "id": "v8-target-context-2026-10-09",
+  "validationStatus": "experimental-unvalidated",
+  "scope": "Observable behavior rules and authored synthetic references; not psychological ground truth",
+  "changePolicy": "New algorithm changes require a new version, rationale and predeclared evaluation; do not update this manifest merely to make drift tests pass. Existing holdout is exposed and cannot certify generalization.",
+  "sha256": {
+    "src/infrastructure/jev-behaviors.ts": "b65faad394bcc320cbc17c87dfb76603cfe740f083387b4206b0fd1becd71f8a",
+    "src/application/signal-episodes.ts": "ee9d57ddc6ea8339e6493bc841d62490800060abee1fe639462b9d84f235991a",
+    "src/application/batches.ts": "7a6324166e6616e53673c7cb27b07935380e5760ef0a452d19b72a998f4b8b16",
+    "src/infrastructure/jev.ts": "9dfc88b214203b249a399afcfddf07ad34a8c3e80dcb6821464cc16c643fab2f",
+    "src/infrastructure/jev-evidence.ts": "cc81d06ffca7967f1c6041f3518592bbd0f4dc24405052cebb338cef86c9aca7",
+    "src/infrastructure/jev-rubric.ts": "9d1661d00913b13a7ba09e176b64263d97e4607a0048733e80b898316431a8b4",
+    "src/application/sanitizer.ts": "53798a1e90558388a8a12eea81be6286131fc37e0c9ba5b9aa98a85be867cf83",
+    "evaluation/corpus.ts": "4a8e53b07de72fa0fe3911c3c626f7a5680d47334254f227f3a6a10da33bb2a8",
+    "evaluation/scoring.ts": "435615573c6fde7a02f7b784fc9d7e4263c9b2a95d9e0d74ca5656975a26e52d",
+    "src/application/relationship-outlook.ts": "f7b0decbf6b0ffdd8d6f10944ee67de96c123b47bf7c766db64aa46153de6504",
+    "evaluation/attribution-corpus.ts": "971ee44684361ecb725f58c0f2abee1cd138ba42ae7c967de3b87b3c77bb031a"
+  },
+  "previousProfile": "evaluation/profiles/v7-experimental-frozen-2026-10-09.json",
+  "changeRationale": "Explicitly disambiguate former partners, third-party hostility and quoted rejection; add local conditional scenarios and five-dimension overview. Numeric composition is unchanged. New attribution cases are authored and not live-tested."
+}

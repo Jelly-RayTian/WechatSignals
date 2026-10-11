@@ -1,0 +1,4 @@
+50b64a1bd525ef2f2d692b504d55d6adc29c398227e38904b340dc9f5c1255ad  vendor/speech/whisper-cli
+6d175a4743ca50256e89a8cdd731100f9cee33bd79aeea46894d209410dc6617  vendor/speech/ffmpeg
+ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb  vendor/speech/ggml-small-q5_1.bin
+422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898  vendor/speech/ggml-base-q5_1.bin
