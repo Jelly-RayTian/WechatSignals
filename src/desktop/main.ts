@@ -25,6 +25,8 @@ if (process.env.WECHAT_SIGNALS_TEST_DATA_DIR)
 app
   .whenReady()
   .then(async () => {
+    const appIcon = join(app.getAppPath(), "assets/app-icon.png");
+    if (process.platform === "darwin") app.dock?.setIcon(appIcon);
     const keychain = new KeychainStore(
       join(app.getAppPath(), "native/keychain-helper"),
     );
@@ -80,6 +82,7 @@ app
       ),
     );
     const window = new BrowserWindow({
+      icon: appIcon,
       width: 1180,
       height: 800,
       minWidth: 900,
