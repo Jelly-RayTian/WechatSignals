@@ -1,3 +1,5 @@
+import { ImageObservation } from "./image-observation";
+import { CoveragePanel, InteractionPanel } from "./insights";
 import { MetricReport } from "./report";
 import { LocalComparison } from "./local-comparison";
 import { ConversationSearch } from "./conversation-search";
@@ -10,6 +12,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   type DesktopApi,
+  type EvidenceContext,
+  type Metric,
   type Conversation,
   type View,
   type ConnectionReport,
@@ -58,11 +62,76 @@ function App() {
     [speechConcurrency, setSpeechConcurrency] = useState(20),
     [preferences, setPreferences] = useState<AppSettings>(defaultSettings),
     [background, setBackground] = useState<Job | null>(null),
-    [settingsTab, setSettingsTab] = useState("speech"),
+    [settingsTab, setSettingsTab] = useState("jev"),
     [evaluation, setEvaluation] = useState<EvaluationSummary | null>(null),
     [speechMode, setSpeechMode] = useState<"fast" | "accurate">("fast"),
     [model, setModel] = useState("jev-latest"),
-    [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+    [editing, setEditing] = useState<{
+      id: string;
+      text: string;
+      kind?: "image";
+    } | null>(null),
+    [evidenceContext, setEvidenceContext] = useState<EvidenceContext | null>(
+      null,
+    );
+  const openContext = (
+    segment: number,
+    metric: Metric,
+    side: "support" | "counter",
+  ) =>
+    run(async () => {
+      if (!api || !view?.analysis) return;
+      const version = selection.current;
+      const context = await api.evidenceContext(
+        selected,
+        view.analysis.id,
+        segment,
+        metric,
+        side,
+      );
+      if (version === selection.current) setEvidenceContext(context);
+    });
+  useEffect(() => {
+    if (!settings && !editing && !plan && !connection && !evidenceContext)
+      return;
+    const previous = document.activeElement as HTMLElement | null;
+    const dialog = Array.from(
+      document.querySelectorAll<HTMLElement>(".overlay"),
+    ).at(-1);
+    dialog?.querySelector<HTMLElement>("button,input,select,textarea")?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSettings(false);
+        setKey("");
+        setEditing(null);
+        setPlan(null);
+        setConnection(null);
+        setEvidenceContext(null);
+      }
+      if (event.key === "Tab" && dialog) {
+        const items = Array.from(
+          dialog.querySelectorAll<HTMLElement>(
+            'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
+          ),
+        ).filter((e) => e.getClientRects().length > 0);
+        if (!items.length) return;
+        const first = items[0],
+          last = items.at(-1)!;
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", keydown);
+    return () => {
+      document.removeEventListener("keydown", keydown);
+      previous?.focus();
+    };
+  }, [settings, !!editing, !!plan, !!connection, !!evidenceContext]);
   const selection = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmounted = useRef(false);
@@ -633,8 +702,27 @@ function App() {
                   })
                 }
               >
-                本机识别图片文字
+                本机观察图片
               </button>
+              {!!view.contentCoverage.imageLegacy && (
+                <button
+                  disabled={locked || !complete}
+                  onClick={() =>
+                    run(async () => {
+                      setPlan(null);
+                      const next = await api!.startMediaRecognition(
+                        selected,
+                        true,
+                        true,
+                      );
+                      setJob(next);
+                      watch(next.id, selection.current);
+                    })
+                  }
+                >
+                  升级旧图片观察（{view.contentCoverage.imageLegacy}）
+                </button>
+              )}
               <small>
                 图片不上传；已识别结果本地缓存。识别不等于 Jev
                 判断，仍需点击顶部按钮并确认。
@@ -692,9 +780,11 @@ function App() {
               <p>当前没有真实数据，因此图表和 AI 分数保持空白。</p>
             </div>
           ) : tab === "report" ? (
-            <MetricReport view={view} />
+            <MetricReport view={view} onOpenContext={openContext} />
           ) : tab === "charts" ? (
             <>
+              <CoveragePanel view={view} />
+              <InteractionPanel view={view} />
               <Dashboard view={view} />
               <LocalComparison view={view} />
             </>
@@ -723,17 +813,20 @@ function App() {
                         : m.text}
                     </p>
                     {m.kind === "image" && (
-                      <div className="image-observation">
-                        <small>
-                          {m.media?.status === "recognized"
-                            ? "本机图片OCR · 图片中的文字，不是发送者陈述 · 请核对"
-                            : m.media?.status === "no_text"
-                              ? "未检出文字；没有识别画面含义"
-                              : m.media?.status === "unavailable"
-                                ? "图片读取或OCR失败；请先在微信打开原图，再重试"
-                                : "尚未本机OCR"}
-                        </small>
-                        {m.media?.text && <p>{m.media.text}</p>}
+                      <div>
+                        <ImageObservation media={m.media} />
+                        <button
+                          disabled={locked}
+                          onClick={() =>
+                            setEditing({
+                              id: m.id,
+                              text: m.media?.text ?? "",
+                              kind: "image",
+                            })
+                          }
+                        >
+                          检查 / 编辑图片文字
+                        </button>
                       </div>
                     )}
                     {m.kind === "voice" && (
@@ -760,7 +853,9 @@ function App() {
                         )}
                         <small>
                           {m.transcript
-                            ? "语音自动转写 · 请核对"
+                            ? m.transcriptReviewed
+                              ? "文字已人工核对 · 无语气信息"
+                              : "语音自动转写 · 无可信度标注，请核对"
                             : m.voiceError
                               ? voiceErrorLabels[m.voiceError]
                               : "未转写 · 不参与 AI 语义分析"}
@@ -784,7 +879,7 @@ function App() {
       </main>
       {settings && (
         <div
-          className="overlay"
+          className="overlay settings-page"
           role="dialog"
           aria-modal="true"
           aria-label="应用设置"
@@ -801,7 +896,13 @@ function App() {
                 关闭
               </button>
             </div>
-            <div className="tabs settings-tabs">
+            <div className="tabs settings-tabs" aria-label="设置页面导航">
+              <button
+                className={settingsTab === "media" ? "selected" : ""}
+                onClick={() => setSettingsTab("media")}
+              >
+                图片与隐私
+              </button>
               <button
                 className={settingsTab === "speech" ? "selected" : ""}
                 onClick={() => setSettingsTab("speech")}
@@ -821,6 +922,36 @@ function App() {
                 评分标准
               </button>
             </div>
+            {settingsTab === "media" && (
+              <section className="settings-media">
+                <h3>本机图片观察</h3>
+                <p>
+                  使用 macOS 自带
+                  Vision，无需购买或接入其他模型。提取图片文字、检测条码数量，并在支持时显示有限粗分类。
+                </p>
+                <p>
+                  不会保存条码内容，不分析人物身份、心理或表情情绪。图片和粗分类标签不会发给
+                  Jev；只有你预览确认的匿名文字会发送。
+                </p>
+                <p>
+                  旧 OCR
+                  缓存仍可复用。需要粗分类时，点击工作区“升级旧图片观察”；人工核对过的文字会保留。
+                </p>
+                <p>
+                  多帧图片只处理首帧；没有标签不代表画面没有内容，无法理解复杂梗图或照片背后的意图。
+                </p>
+                <h3>语音质量</h3>
+                <p>
+                  当前 Whisper
+                  接口未提供可校准的逐句可信度，因此不显示伪造的百分比。重要语音建议核对；编辑后的文字会标记“人工核对”并在本机持久保存。
+                </p>
+                <h3>数据与密钥</h3>
+                <p>
+                  聊天、识别文字与分析存 SQLite；API Key 存
+                  Keychain。后台转写不调用 Jev，不自动发送微信消息。
+                </p>
+              </section>
+            )}
             {settingsTab === "speech" && (
               <section>
                 <h3>后台语音转文字</h3>
@@ -902,7 +1033,7 @@ function App() {
             )}
             {settingsTab === "rubric" && (
               <section>
-                <h3>行为评分 · 对象归属版 v8</h3>
+                <h3>行为评分 · 对话证据版 v9</h3>
                 <p className="report-coverage">
                   实验性规则，尚未校准。规则与案例已冻结并校验摘要；任何评分变更必须留下版本与评测记录，不能仅因觉得偏高或偏低而改权重。当前没有真实关系准确率。
                 </p>
@@ -921,7 +1052,7 @@ function App() {
                   </li>
                 </ul>
                 <p className="note">
-                  这些分数反映聊天行为信号，不代表对方真实心理状态。此前v4已使用合成行为标签运行官方API评测；下方报告是其历史基线，不能代表当前v8效果或真实聊天准确率。分析前请检查转写与匿名化预览。
+                  这些分数反映聊天行为信号，不代表对方真实心理状态。此前v4已使用合成行为标签运行官方API评测；下方报告是其历史基线，不能代表当前v9效果或真实聊天准确率。分析前请检查转写与匿名化预览。
                 </p>
               </section>
             )}
@@ -941,12 +1072,12 @@ function App() {
                 <p className="note">
                   下次手动分析时，在同一请求中增加12题，比较选项顺序变化后的行为等级。存在差异标记需复核；不替换初次判断。会增加请求题数和费用，默认关闭。
                 </p>
-                <h3>评价验证 · 合成案例</h3>
+                <h3>评价验证与分类误差</h3>
                 {evaluation ? (
                   <>
                     <p>
                       评测版本 {evaluation.rubricVersion} ·
-                      历史报告，不能用于验证当前 v8
+                      历史报告，不能用于验证当前 v9
                       汇总。此前查看过的保留集不再视为新的盲测集。
                     </p>
                     <p>
@@ -964,8 +1095,54 @@ function App() {
                       {evaluation.positiveLabels} · 本地校对{" "}
                       {evaluation.localLabels} 条
                     </p>
+                    <p>
+                      完整运行覆盖：
+                      {evaluation.coverage == null
+                        ? "旧报告未记录"
+                        : Math.round(evaluation.coverage * 100) + "%"}{" "}
+                      · 数据来源：
+                      {evaluation.independentAnnotation
+                        ? "提供方声明独立标注（不等于真实关系验证）"
+                        : "开发者编写合成样例，未独立盲测"}
+                    </p>
+                    {evaluation.perCategory && (
+                      <table className="evaluation-breakdown">
+                        <thead>
+                          <tr>
+                            <th>类别</th>
+                            <th>标签匹配</th>
+                            <th>误报</th>
+                            <th>漏报</th>
+                            <th>无法判断</th>
+                            <th>失败案例</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.entries(evaluation.perCategory).map(
+                            ([name, r]) => (
+                              <tr key={name}>
+                                <td>{name}</td>
+                                <td>
+                                  {r.correct}/{r.labels}
+                                </td>
+                                <td>
+                                  {r.falsePositive}/{r.negativeLabels}
+                                </td>
+                                <td>
+                                  {r.missed}/{r.positiveLabels}
+                                </td>
+                                <td>{r.abstained}</td>
+                                <td>
+                                  {r.failedCases}/{r.cases}
+                                </td>
+                              </tr>
+                            ),
+                          )}
+                        </tbody>
+                      </table>
+                    )}
                     <small>
-                      这是作者构造的合成案例与规则标签，不是独立人工盲测，不代表真实关系判断准确率。真实案例可在评价报告中校对行为标签，校对只保存在本机，不修改原评分、不发送Jev。
+                      行为标签匹配不代表真实关系判断准确率。独立性只能依据数据来源说明，系统无法替代人工核验。真实案例可在评价报告中校对行为标签，校对只保存在本机，不修改原评分、不发送Jev。
                     </small>
                   </>
                 ) : (
@@ -1066,20 +1243,80 @@ function App() {
           </section>
         </div>
       )}
+      {evidenceContext && (
+        <div
+          className="overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="证据聊天上下文"
+        >
+          <section className="dialog context-dialog">
+            <div className="dialog-title">
+              <h2>证据聊天上下文</h2>
+              <button onClick={() => setEvidenceContext(null)}>关闭</button>
+            </div>
+            <p>{evidenceContext.detail}</p>
+            <div className="context-messages">
+              {evidenceContext.messages.map((m) => (
+                <div
+                  key={m.id}
+                  className={
+                    "message " +
+                    m.sender +
+                    (evidenceContext.targetIds.includes(m.id)
+                      ? " evidence-target"
+                      : "")
+                  }
+                >
+                  <small>
+                    {m.sender === "me"
+                      ? "我"
+                      : m.sender === "other"
+                        ? "对方"
+                        : "未知"}{" "}
+                    · {new Date(m.timestamp * 1000).toLocaleString()}
+                    {evidenceContext.targetIds.includes(m.id)
+                      ? " · 所选证据范围"
+                      : " · 相邻上下文"}
+                  </small>
+                  <p>
+                    {m.kind === "voice"
+                      ? m.transcript || "[语音未转写]"
+                      : m.kind === "image"
+                        ? m.media?.text || "[图片无可用文字]"
+                        : m.text}
+                  </p>
+                  {m.kind !== "text" && (
+                    <small>
+                      来源：{m.kind} · 文字可能有误；画面和语气未理解
+                    </small>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
       {editing && (
         <div
           className="overlay"
           role="dialog"
           aria-modal="true"
-          aria-label="检查语音转写"
+          aria-label={
+            editing.kind === "image" ? "检查图片文字" : "检查语音转写"
+          }
         >
           <section className="dialog">
-            <h2>检查语音转写</h2>
+            <h2>
+              {editing.kind === "image" ? "检查图片文字" : "检查语音转写"}
+            </h2>
             <p>
-              自动转写可能漏字或误识别。编辑只保存在本机，分析时仍需匿名化预览。
+              识别可能漏字或误识别。请只校正实际内容，不补写未观察到的信息。编辑只保存在本机；分析时仍需匿名化预览。
             </p>
             <textarea
-              aria-label="语音转写文字"
+              aria-label={
+                editing.kind === "image" ? "图片识别文字" : "语音转写文字"
+              }
               value={editing.text}
               onChange={(e) => setEditing({ ...editing, text: e.target.value })}
             />
@@ -1091,11 +1328,11 @@ function App() {
               onClick={() =>
                 run(async () => {
                   setView(
-                    await api!.editTranscript(
-                      selected,
-                      editing.id,
-                      editing.text,
-                    ),
+                    await (
+                      editing.kind === "image"
+                        ? api!.editImageText
+                        : api!.editTranscript
+                    )(selected, editing.id, editing.text),
                   );
                   setPlan(null);
                   setEditing(null);
@@ -1162,7 +1399,7 @@ function App() {
             <p>
               {plan.messageCount} 条匿名消息（含来源和缺失标记） ·{" "}
               {plan.batches.length} 次官方 Jev
-              请求（每次12项具体行为、10项证据选择
+              请求（每次12项具体行为、3项双向互动、10项证据选择
               {preferences.jevConsistency ? "，另加12项换序复核" : ""}） · 排除{" "}
               {plan.omitted} 条 · 截短 {plan.truncated}{" "}
               条长消息。检查正文中可能残留的人名；可以取消。
@@ -1187,8 +1424,8 @@ function App() {
             <p className="note">
               仅将各段 speaker（Me / Person
               A）、清理后的正文、来源类型与内容可用状态发送到
-              api.typesafe.ai。context
-              为少量前文，只用于理解，不重复计数。日期、联系人 ID
+              api.typesafe.ai。context / followingContext
+              为有限前后文，只用于理解，不重复计数。日期、联系人 ID
               和本地统计不发送。规则匿名化可能遗漏自由文本身份信息。
             </p>
             <button disabled={busy} onClick={() => setPlan(null)}>

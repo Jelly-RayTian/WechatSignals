@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("wechat", {
+  evidenceContext: (id:string, analysisId:string, segment:number, metric:string, side:string) => ipcRenderer.invoke("evidenceContext",id,analysisId,segment,metric,side),
+  editImageText: (id:string,messageId:string,text:string) => ipcRenderer.invoke("editImageText",id,messageId,text),
   evaluationReport: () => ipcRenderer.invoke("evaluationReport"),
   labelBehavior: (
     id: string,
@@ -34,8 +36,8 @@ contextBridge.exposeInMainWorld("wechat", {
     ipcRenderer.invoke("startRead", id, range, resume),
   job: (id: string) => ipcRenderer.invoke("job", id),
   cancelJob: (id: string) => ipcRenderer.invoke("cancelJob", id),
-  startMediaRecognition: (id: string, retry?: boolean) =>
-    ipcRenderer.invoke("startMediaRecognition", id, retry),
+  startMediaRecognition: (id: string, retry?: boolean, upgrade?: boolean) =>
+    ipcRenderer.invoke("startMediaRecognition", id, retry, upgrade),
   previewPlan: (id: string) => ipcRenderer.invoke("previewPlan", id),
   previewBatch: (token: string, index: number) =>
     ipcRenderer.invoke("previewBatch", token, index),

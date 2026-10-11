@@ -1,4 +1,10 @@
 import React, { useState } from "react";
+import {
+  CoveragePanel,
+  InteractionPanel,
+  SignalTimeline,
+  MetricEvidenceDigest,
+} from "./insights";
 import { RelationshipOutlook } from "./relationship-outlook";
 import { ReportCharts, metricExplanations } from "./report-charts";
 import { behaviorDefinitions } from "../infrastructure/jev-behaviors";
@@ -13,7 +19,17 @@ export const qualityLabels = {
   limited: "需复核",
   insufficient: "证据不足",
 };
-export function MetricReport({ view }: { view: View }) {
+export function MetricReport({
+  view,
+  onOpenContext,
+}: {
+  view: View;
+  onOpenContext?: (
+    segment: number,
+    metric: Metric,
+    side: "support" | "counter",
+  ) => void;
+}) {
   const [panel, setPanel] = useState("overview");
   const [metric, setMetric] = useState<Metric>("romantic_interest");
   const [chosen, setChosen] = useState(-1);
@@ -46,9 +62,11 @@ export function MetricReport({ view }: { view: View }) {
         </div>
         <span className="pill">
           {eventMode
-            ? analysis?.rubricVersion?.includes("v8")
-              ? "对象归属版 v8 · 事件汇总"
-              : "信号事件汇总 · v7"
+            ? analysis?.rubricVersion?.includes("v9")
+              ? "对话证据版 v9 · 双向互动"
+              : analysis?.rubricVersion?.includes("v8")
+                ? "对象归属版 v8 · 事件汇总"
+                : "信号事件汇总 · v7"
             : analysis?.rubricVersion?.includes("v6")
               ? "多模态证据版 v6"
               : analysis?.rubricVersion?.includes("v5")
@@ -85,7 +103,7 @@ export function MetricReport({ view }: { view: View }) {
         {eventMode && (
           <p className="report-coverage">
             已按信号事件在本机汇总。日常聊天计入出现频率，不稀释已观察到的明确表达。
-            {!analysis?.rubricVersion?.match(/v[78]/) &&
+            {!analysis?.rubricVersion?.match(/v[789]/) &&
               "使用已保存的旧版行为判断重新计算；没有重新请求 Jev，原始记录与分析日期保留。"}
           </p>
         )}
@@ -125,6 +143,7 @@ export function MetricReport({ view }: { view: View }) {
         </div>
       )}
       <div hidden={panel !== "overview"}>
+        <CoveragePanel view={view} />
         {analysis && (
           <section className="five-metric-overview" aria-label="全部五项评价">
             <h3>全部五项评价</h3>
@@ -356,6 +375,22 @@ export function MetricReport({ view }: { view: View }) {
             </p>
           </section>
         )}
+        <InteractionPanel
+          view={view}
+          onSelect={(id, i) => {
+            setMetric(id);
+            setChosen(i);
+            setPanel("evidence");
+          }}
+        />
+        <SignalTimeline
+          analysis={analysis}
+          onSelect={(id, i) => {
+            setMetric(id);
+            setChosen(i);
+            setPanel("evidence");
+          }}
+        />
         {analysis && (
           <ReportCharts
             analysis={analysis}
@@ -439,7 +474,7 @@ export function MetricReport({ view }: { view: View }) {
                 <small>
                   {total?.summary?.signal
                     ? "观察到的信号强度"
-                    : analysis.rubricVersion?.match(/v[34567]/)
+                    : analysis.rubricVersion?.match(/v[3456789]/)
                       ? "历史中位数"
                       : "旧版汇总"}
                 </small>
@@ -495,6 +530,14 @@ export function MetricReport({ view }: { view: View }) {
                 </select>
               </label>
             )}
+            <MetricEvidenceDigest
+              analysis={analysis}
+              metric={metric}
+              onSelect={(id, i) => {
+                setMetric(id);
+                setChosen(i);
+              }}
+            />
             <section className="metric-explanation">
               <h3>如何理解{metricLabels[metric]}</h3>
               <p>{metricExplanations[metric].meaning}</p>
@@ -640,7 +683,19 @@ export function MetricReport({ view }: { view: View }) {
             )}
             {(["support", "counter"] as const).map((side) => (
               <section className={"evidence-block " + side} key={side}>
-                <h3>{side === "support" ? "支持片段" : "反证 / 替代解释"}</h3>
+                <div className="panel-heading">
+                  <h3>{side === "support" ? "支持片段" : "反证 / 替代解释"}</h3>
+                  {detail?.[side] && onOpenContext && (
+                    <button onClick={() => onOpenContext(index, metric, side)}>
+                      定位完整聊天上下文 →
+                    </button>
+                  )}
+                </div>
+                <p className="note">
+                  {side === "support"
+                    ? "下列是模型选中的范围，需检查对象、引用与相邻回应，不能把范围内每句话都视为支持。"
+                    : "反证也可能只是普通友好或事务解释；第三方负面情绪不等于对你疏远。"}
+                </p>
                 {detail?.[side] ? (
                   detail[side]!.messages.map((m, i) => (
                     <blockquote key={i}>
@@ -650,11 +705,7 @@ export function MetricReport({ view }: { view: View }) {
                   ))
                 ) : (
                   <p className="note">
-                    {total?.summary?.signal
-                      ? "观察到的信号强度"
-                      : analysis.rubricVersion?.match(/v[34567]/)
-                        ? "本段没有选出明确片段。"
-                        : "旧结果没有引用，请手动重新分析获取。"}
+                    本段未选出明确片段；这不等于没有该行为，也不等于分数为零。
                   </p>
                 )}
               </section>

@@ -2,7 +2,7 @@ import Foundation
 import Vision
 import ImageIO
 
-// Local Apple Vision OCR only. Never uploads bytes or infers emotions/faces.
+// Built-in Apple Vision only. No uploads, barcode payloads, identity or emotion inference.
 do {
     guard CommandLine.arguments.count == 2 else { throw NSError(domain: "OCR", code: 1) }
     let url = URL(fileURLWithPath: CommandLine.arguments[1])
@@ -35,7 +35,26 @@ do {
     let accepted = lines.filter { $0.confidence >= 0.5 }.prefix(150)
     let text = String(accepted.map { $0.string }.joined(separator: "\n").prefix(10000))
     let confidence = accepted.isEmpty ? 0 : accepted.reduce(0.0) { $0 + Double($1.confidence) } / Double(accepted.count)
-    let data = try JSONSerialization.data(withJSONObject: ["text": text, "confidence": confidence])
+    var labels: [[String: Any]] = []
+    var classificationAvailable = false
+    let coarse: Set<String> = ["food", "drink", "dessert", "fruit", "flower", "plant", "cat", "dog", "animal", "landscape", "sky", "beach", "mountain", "building", "vehicle", "car", "book", "document", "text", "screenshot"]
+    // A separate request may fail without discarding valid OCR.
+    let classify = VNClassifyImageRequest()
+    do {
+        try VNImageRequestHandler(cgImage: image, options: [:]).perform([classify])
+        classificationAvailable = true
+        labels = (classify.results ?? []).filter { $0.confidence >= 0.7 && coarse.contains($0.identifier) }.prefix(5).map { ["name": $0.identifier, "confidence": Double($0.confidence)] }
+    } catch { /* Optional local capability unavailable. */ }
+    let barcodes = VNDetectBarcodesRequest()
+    var barcodeCount = 0
+    do {
+        try VNImageRequestHandler(cgImage: image, options: [:]).perform([barcodes])
+        barcodeCount = barcodes.results?.count ?? 0
+    } catch { /* Do not fabricate a detected barcode. */ }
+    let data = try JSONSerialization.data(withJSONObject: ["text": text, "confidence": confidence,
+        "labels": labels, "classificationAvailable": classificationAvailable,
+        "barcodeCount": barcodeCount, "width": width, "height": height,
+        "frameCount": CGImageSourceGetCount(source)])
     FileHandle.standardOutput.write(data)
 } catch {
     // No source paths or OCR text in error output.

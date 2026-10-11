@@ -51,6 +51,7 @@ export class SqliteRepository implements AnalysisRepository {
     db.run(
       "CREATE TABLE IF NOT EXISTS media_observations(id TEXT PRIMARY KEY,data TEXT NOT NULL)",
     );
+    db.run("CREATE TABLE IF NOT EXISTS transcript_reviews(id TEXT PRIMARY KEY)");
     const repo = new SqliteRepository(
       db,
       path,
@@ -129,7 +130,15 @@ export class SqliteRepository implements AnalysisRepository {
         0,
     );
   }
+  getTranscriptReview(id: string) {
+    const stmt = this.db.prepare("SELECT id FROM transcript_reviews WHERE id=?");
+    try { stmt.bind([id]); return stmt.step(); } finally { stmt.free(); }
+  }
+  saveTranscriptReview(id: string) {
+    this.db.run("INSERT OR IGNORE INTO transcript_reviews VALUES(?)", [id]); this.persist();
+  }
   saveTranscript(id: string, text: string) {
+    this.db.run("DELETE FROM transcript_reviews WHERE id=?", [id]);
     this.db.run("INSERT OR REPLACE INTO transcripts VALUES(?,?)", [id, text]);
     this.persist();
     if (this.transcriptFolder) {

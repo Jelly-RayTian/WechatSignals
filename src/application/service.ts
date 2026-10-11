@@ -1,3 +1,5 @@
+import { dialogueInteractions } from "./dialogue-interactions";
+import { locateEvidence } from "./evidence-context";
 import type { ImageRecognizer } from "../infrastructure/image-ocr";
 import { availableParallelism } from "node:os";
 import { VoiceError } from "../domain/voice-errors";
@@ -148,6 +150,7 @@ export class ApplicationService {
     for (const m of data.messages) {
       if (m.kind === "image" && !m.media)
         m.media = this.repo.getMedia?.(m.id) ?? undefined;
+      if (m.kind === "voice") m.transcriptReviewed = this.repo.getTranscriptReview?.(m.id) ?? false;
       if (m.kind === "voice" && !m.transcript) {
         const saved = this.repo.getTranscript?.(m.id);
         if (saved) {
@@ -167,12 +170,14 @@ export class ApplicationService {
       conversation: this.selected(id),
       messages: data.messages.slice(-300),
       stats: statistics(data.messages),
+      interactions: dialogueInteractions(data.messages, data.coverage.range.until),
       charts: chartData(data.messages, data.coverage.range),
       coverage: { ...data.coverage },
       analysis,
       contentCoverage: {
         total: data.messages.length,
         images: data.messages.filter((m) => m.kind === "image").length,
+        imageLegacy: data.messages.filter(m => m.kind === "image" && m.media?.version === "vision-ocr-v1" && !m.media.reviewed).length,
         imageProcessed: data.messages.filter(
           (m) =>
             m.kind === "image" && m.media && m.media.status !== "unavailable",
@@ -438,28 +443,30 @@ export class ApplicationService {
     if (!m || typeof text !== "string" || text.length > 10000)
       throw new Error("无效转写编辑");
     this.repo.saveTranscript?.(m.id, text.trim());
+    this.repo.saveTranscriptReview?.(m.id);
+    m.transcriptReviewed = true;
     m.transcript = text.trim();
     this.repo.cacheMessages(id, data!.messages);
     this.invalidatePlans(id);
     return this.view(id);
   }
-  startMediaRecognition(id: string, retry = false) {
+  startMediaRecognition(id: string, retry = false, upgrade = false) {
     this.selected(id);
     const data = this.loaded.get(id);
     if (!data?.coverage.complete || !this.images)
-      throw new Error("请先读完范围并配置本机OCR");
+      throw new Error("请先读完范围并配置本机图片识别");
     this.view(id);
     const images = data.messages.filter(
       (m) =>
         m.kind === "image" &&
-        (!m.media || (retry && m.media.status === "unavailable")),
+        (!m.media || (retry && m.media.status === "unavailable") || (upgrade && m.media.version === "vision-ocr-v1" && !m.media.reviewed)),
     );
     if (!images.length)
       throw new Error("本范围没有待识别图片；已缓存结果会直接复用");
     const { job, controller } = this.createJob("media");
     job.totalBatches = images.length;
     job.concurrency = Math.min(4, images.length);
-    job.detail = "本机图片OCR · 不上传图片 · 4路并行";
+    job.detail = "本机图片观察 · 不上传图片 · 4路并行";
     this.invalidatePlans(id);
     void (async () => {
       let cursor = 0;
@@ -489,7 +496,7 @@ export class ApplicationService {
             job.failed = (job.failed ?? 0) + 1;
           }
           job.completedBatches++;
-          job.detail = `本机图片OCR ${job.completedBatches}/${images.length} · 已处理 ${job.count} · 不可用 ${job.failed ?? 0}`;
+          job.detail = `本机图片观察 ${job.completedBatches}/${images.length} · 已处理 ${job.count} · 不可用 ${job.failed ?? 0}`;
         }
       };
       try {
@@ -522,6 +529,23 @@ export class ApplicationService {
       }
     })();
     return { ...job };
+  }
+  evidenceContext(id: string, analysisId: string, segment: number, metric: import("../domain/types").Metric, side: "support" | "counter") {
+    this.selected(id);
+    const saved = this.repo.latest(id);
+    if (!saved || saved.id !== analysisId) throw new Error("报告已改变，请重新打开");
+    const data = this.loaded.get(id);
+    return locateEvidence(data?.messages ?? [], saved.segments?.[segment], saved.segments?.[segment]?.result.metrics[metric]?.[side]);
+  }
+  editImageText(id: string, messageId: string, text: string) {
+    this.selected(id);
+    if (this.busy) throw new Error("请等待当前任务完成");
+    const data = this.loaded.get(id), m = data?.messages.find(m => m.id === messageId && m.kind === "image");
+    if (!m || text.length > 10000) throw new Error("图片文字无效");
+    const media = { ...m.media, version: "vision-local-v2" as const, text: text.trim(), status: text.trim() ? "recognized" as const : "no_text" as const, confidence: m.media?.confidence ?? null, reviewed: true };
+    this.repo.saveMedia?.(m.id, media); m.media = media;
+    this.repo.cacheMessages(id, data!.messages); this.invalidatePlans(id);
+    return this.view(id);
   }
   async previewPlan(id: string) {
     this.selected(id);
@@ -587,6 +611,8 @@ export class ApplicationService {
           first: summary.first,
           last: summary.last,
           result,
+          messageIds: summary.messageIds,
+          splitReason: summary.splitReason,
         });
         job.count += result.messageCount;
         job.completedBatches = segments.length;

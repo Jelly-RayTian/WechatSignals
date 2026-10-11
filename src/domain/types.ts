@@ -18,11 +18,19 @@ export type Message = {
   text: string;
   kind: "text" | "voice" | "emoji" | "image" | "video" | "rich" | "unsupported";
   transcript?: string;
+  transcriptReviewed?: boolean;
   media?: MediaObservation;
   voiceError?: import("./voice-errors").VoiceErrorCode;
 };
 export type MediaObservation = {
-  version: "vision-ocr-v1";
+  version: "vision-ocr-v1" | "vision-local-v2";
+  reviewed?: boolean;
+  labels?: { name: string; confidence: number }[];
+  barcodeCount?: number;
+  width?: number;
+  height?: number;
+  frameCount?: number;
+  classificationAvailable?: boolean;
   status: "recognized" | "no_text" | "unavailable";
   text: string;
   confidence: number | null;
@@ -97,7 +105,10 @@ export type MetricResult = {
     insufficientSegments?: number;
   };
 };
+export type InteractionJudgment = { choice: string; confidence: number; probabilities: Record<string, number> };
+export type EvidenceContext = { available: boolean; detail: string; messages: Message[]; targetIds: string[] };
 export type Analysis = {
+  interactions?: Record<string, InteractionJudgment>;
   aggregationVersion?: string;
   behaviors?: Record<
     string,
@@ -153,6 +164,8 @@ export interface AnalysisRepository {
   cacheContacts(contacts: Contact[], conversations: Conversation[]): void;
   cacheMessages(id: string, messages: Message[]): void;
   getTranscript?(id: string): string | null;
+  getTranscriptReview?(id: string): boolean;
+  saveTranscriptReview?(id: string): void;
   saveTranscript?(id: string, text: string): void;
   getMedia?(id: string): MediaObservation | null;
   saveMedia?(id: string, value: MediaObservation): void;
@@ -163,6 +176,7 @@ export interface SecretStore {
   delete(): Promise<void>;
 }
 export type View = {
+  interactions?: import("../application/dialogue-interactions").DialogueInteractions;
   conversation: Conversation;
   messages: Message[];
   stats: Stats;
@@ -173,6 +187,7 @@ export type View = {
     text: number;
     voice: number;
     transcribed: number;
+    imageLegacy?: number;
     images?: number;
     imageOcr?: number;
     imageProcessed?: number;
@@ -185,6 +200,8 @@ export type View = {
 };
 export type Preview = { state: string; messageCount: number; omitted: number };
 export interface DesktopApi {
+  evidenceContext(id: string, analysisId: string, segment: number, metric: Metric, side: "support" | "counter"): Promise<EvidenceContext>;
+  editImageText(id: string, messageId: string, text: string): Promise<View>;
   evaluationReport(): Promise<EvaluationSummary | null>;
   labelBehavior(
     analysisId: string,
@@ -227,10 +244,14 @@ export interface DesktopApi {
     concurrency?: number,
   ): Promise<Job>;
   editTranscript(id: string, messageId: string, text: string): Promise<View>;
-  startMediaRecognition(id: string, retry?: boolean): Promise<Job>;
+  startMediaRecognition(id: string, retry?: boolean, upgrade?: boolean): Promise<Job>;
 }
 
 export type EvaluationSummary = {
+  dataType?: string;
+  independentAnnotation?: boolean;
+  coverage?: number | null;
+  perCategory?: Record<string,{labels:number;correct:number;falsePositive:number;negativeLabels:number;missed:number;positiveLabels:number;abstained:number;missing:number;cases:number;failedCases:number}>;
   createdAt: string;
   model: string;
   rubricVersion: string;
@@ -307,6 +328,8 @@ export type Job = {
   analysis?: Analysis;
 };
 export type BatchSummary = {
+  messageIds?: string[];
+  splitReason?: string;
   index: number;
   messageCount: number;
   first: number;
@@ -314,6 +337,7 @@ export type BatchSummary = {
   bytes: number;
 };
 export type AnalysisPlan = {
+  segmentationVersion?: string;
   inputCoverage?: {
     total: number;
     omitted: number;
@@ -328,6 +352,8 @@ export type AnalysisPlan = {
   batches: BatchSummary[];
 };
 export type AnalysisSegment = {
+  messageIds?: string[];
+  splitReason?: string;
   index: number;
   first: number;
   last: number;

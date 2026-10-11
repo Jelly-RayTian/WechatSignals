@@ -93,6 +93,8 @@ app
       },
     });
     const handlers: Record<string, (...args: any[]) => unknown> = {
+      evidenceContext: (id, analysisId, segment, metric, side) => service.evidenceContext(validId(id),validId(analysisId),z.number().int().min(0).max(50000).parse(segment),z.enum(["romantic_interest","initiative","emotional_investment","closeness","flirting"]).parse(metric),z.enum(["support","counter"]).parse(side)),
+      editImageText: (id,messageId,text) => service.editImageText(validId(id),validId(messageId),z.string().max(10000).parse(text)),
       evaluationReport: async () => {
         try {
           const r = JSON.parse(
@@ -113,13 +115,16 @@ app
             negativeLabels: n,
             missed: n,
             positiveLabels: n,
+            coverage:z.number().min(0).max(1).nullable().optional(),
+            perCategory:z.record(z.string(),z.object({labels:n,correct:n,falsePositive:n,negativeLabels:n,missed:n,positiveLabels:n,abstained:n,missing:n,cases:n,failedCases:n})).optional(),
           });
           const report = z
             .object({
               createdAt: z.string(),
               model: z.string(),
               rubricVersion: z.string(),
-              dataType: z.literal("authored-synthetic"),
+              dataType: z.enum(["authored-synthetic","independent-deidentified"]),
+              independentAnnotation: z.boolean().optional(),
               overall: summary,
               holdout: summary,
             })
@@ -141,6 +146,10 @@ app
             missed: report.overall.missed,
             positiveLabels: report.overall.positiveLabels,
             localLabels: repo.behaviorLabelCount(),
+            coverage: report.overall.coverage,
+            perCategory: report.overall.perCategory,
+            dataType:report.dataType,
+            independentAnnotation:report.independentAnnotation,
           };
         } catch {
           return null;
@@ -209,8 +218,8 @@ app
         ),
       job: (id) => service.job(validId(id)),
       cancelJob: (id) => service.cancelJob(validId(id)),
-      startMediaRecognition: (id, retry) =>
-        service.startMediaRecognition(validId(id), retry === true),
+      startMediaRecognition: (id, retry, upgrade) =>
+        service.startMediaRecognition(validId(id), retry === true, upgrade === true),
       previewPlan: (id) => service.previewPlan(validId(id)),
       previewBatch: (token, index) =>
         service.previewBatch(

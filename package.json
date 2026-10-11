@@ -12,7 +12,8 @@
     "preview": "vite --host 127.0.0.1",
     "build:keychain": "swiftc native/Keychain.swift -o native/keychain-helper",
     "audit:scoring": "tsx scripts/audit-scoring.ts",
-    "evaluate:jev": "tsx scripts/evaluate-jev.ts"
+    "evaluate:jev": "tsx scripts/evaluate-jev.ts",
+    "evaluate:jev:v9": "tsx scripts/evaluate-jev.ts --with-attribution --with-dialogue"
   },
   "dependencies": {
     "react": "^19.2.0",

@@ -29,49 +29,37 @@ export function prepareBatches(
   }[];
   const states: string[] = [];
   const summaries: AnalysisPlan["batches"] = [];
-  let buffer: typeof lines = [],
-    context: typeof lines = [],
-    timestamps: number[] = [];
-  const serialize = (target: typeof lines) =>
-    JSON.stringify({ context, messages: target });
-  const flush = () => {
+  let buffer: typeof lines = [], context: typeof lines = [];
+  let indices: number[] = [];
+  const serialize = (target: typeof lines, followingContext: typeof lines = []) =>
+    JSON.stringify({ context, messages: target, followingContext });
+  const flush = (next = -1, reason = "range_end") => {
     if (!buffer.length) return;
-    const state = serialize(buffer);
-    summaries.push({
-      index: states.length,
-      messageCount: buffer.length,
-      first: timestamps[0],
-      last: timestamps.at(-1)!,
-      bytes: Buffer.byteLength(state),
-    });
+    let following = next < 0 ? [] : lines.slice(next, next + 2);
+    while (following.length && (Buffer.byteLength(JSON.stringify(following)) > 800 ||
+      Buffer.byteLength(serialize(buffer, following)) > maxBytes)) following.pop();
+    const state = serialize(buffer, following);
+    summaries.push({ index: states.length, messageCount: buffer.length,
+      first: clean.timestamps[indices[0]], last: clean.timestamps[indices.at(-1)!],
+      bytes: Buffer.byteLength(state), messageIds: indices.map(i => clean.messageIds[i]), splitReason: reason });
     states.push(state);
-    context = [...context, ...buffer].slice(-4);
-    while (
-      context.length &&
-      Buffer.byteLength(JSON.stringify(context)) > Math.min(1200, maxBytes / 3)
-    )
-      context.shift();
-    buffer = [];
-    timestamps = [];
+    context = [...context, ...buffer].slice(-6);
+    while (context.length && Buffer.byteLength(JSON.stringify(context)) > Math.min(1200, maxBytes / 3)) context.shift();
+    buffer = []; indices = [];
   };
   lines.forEach((line, i) => {
-    // Six-hour silence separates sessions; don't carry old intimacy across a new session.
-    if (i && clean.timestamps[i] - clean.timestamps[i - 1] >= 21600) {
-      flush();
-      context = [];
+    const gap = i ? clean.timestamps[i] - clean.timestamps[i - 1] : 0;
+    if (gap >= 1800) {
+      flush(gap < 21600 ? i : -1, gap >= 21600 ? "session_gap" : "topic_pause");
+      if (gap >= 21600) context = [];
     }
-    if (
-      buffer.length &&
-      (buffer.length >= 200 ||
-        Buffer.byteLength(serialize([...buffer, line])) > maxBytes)
-    )
-      flush();
-    while (context.length && Buffer.byteLength(serialize([line])) > maxBytes)
-      context.shift();
-    if (Buffer.byteLength(serialize([line])) > maxBytes)
-      throw new Error("单条匿名化文本超过分段容量");
-    buffer.push(line);
-    timestamps.push(clean.timestamps[i]);
+    const bytes = Buffer.byteLength(serialize([...buffer, line]));
+    if (buffer.length && (buffer.length >= 200 || bytes > maxBytes)) flush(i, "capacity");
+    else if (buffer.length >= 160 && bytes > maxBytes * .65 &&
+      buffer.at(-1)?.speaker === "Person A" && line.speaker === "Me") flush(i, "turn_boundary");
+    while (context.length && Buffer.byteLength(serialize([line])) > maxBytes) context.shift();
+    if (Buffer.byteLength(serialize([line])) > maxBytes) throw new Error("单条匿名化文本超过分段容量");
+    buffer.push(line); indices.push(i);
   });
   flush();
   // Include all question overhead (including optional consistency checks), not
@@ -94,6 +82,7 @@ export function prepareBatches(
   }
   return {
     plan: {
+      segmentationVersion: "dialogue-units-v1",
       inputCoverage: {
         total: messages.length,
         modalities: clean.modalities,

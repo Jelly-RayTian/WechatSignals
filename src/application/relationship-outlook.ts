@@ -89,7 +89,7 @@ export function relationshipOutlook(a: Analysis) {
     cautions.push("已观察到明确边界；不能以热情、倾诉或高分推定边界已撤回。");
   if (boundaryUnknown)
     cautions.push("部分关系边界无法可靠评价，不能据此支持关系升级。");
-  if (a.rubricVersion && !a.rubricVersion.includes("v8"))
+  if (a.rubricVersion && !a.rubricVersion.match(/v[89]/))
     cautions.push(
       "此结果使用旧版行为判据；本机情景不会重新识别第三人归属，需手动分析应用新版判据。",
     );

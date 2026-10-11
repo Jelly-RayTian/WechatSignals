@@ -1,6 +1,11 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
+import {
+  parseEvaluationDataset,
+  compareEvaluationReports,
+} from "../evaluation/independent";
+import { dialogueCases } from "../evaluation/dialogue-corpus";
 import { evaluationCases } from "../evaluation/corpus";
 import { attributionCases } from "../evaluation/attribution-corpus";
 import { evaluatePredictions, type Prediction } from "../evaluation/scoring";
@@ -8,9 +13,18 @@ import { JevAnalysisService } from "../src/infrastructure/jev";
 import { behaviorVersion } from "../src/infrastructure/jev-behaviors";
 import { KeychainStore } from "../src/infrastructure/keychain";
 const args = process.argv.slice(2);
-const selectedCases = args.includes("--with-attribution")
-  ? [...evaluationCases, ...attributionCases]
-  : evaluationCases;
+const datasetArg = args.indexOf("--dataset");
+const dataset =
+  datasetArg < 0
+    ? null
+    : parseEvaluationDataset(
+        JSON.parse(readFileSync(args[datasetArg + 1], "utf8")),
+      );
+const selectedCases = dataset?.cases ?? [
+  ...evaluationCases,
+  ...(args.includes("--with-attribution") ? attributionCases : []),
+  ...(args.includes("--with-dialogue") ? dialogueCases : []),
+];
 const dir = join(process.cwd(), "evaluation/results");
 mkdirSync(dir, { recursive: true });
 const hash = createHash("sha256")
@@ -29,6 +43,7 @@ if (!args.includes("--live")) {
         : 0,
       datasetHash: hash,
       semanticAccuracy: "not_run",
+      independentAnnotation: dataset?.independentAnnotation ?? false,
       note: "Use --live to send only authored synthetic cases to official Jev; never loads WeChat databases.",
     }),
   );
@@ -53,7 +68,18 @@ for (const c of cases) {
       JSON.stringify({ context: [], messages: c.messages }),
       c.messages.length,
     );
-    predictions.push({ id: c.id, behaviors: result.behaviors ?? {} });
+    predictions.push({
+      id: c.id,
+      behaviors: {
+        ...result.behaviors,
+        ...Object.fromEntries(
+          Object.entries(result.interactions ?? {}).map(([id, o]) => [
+            "interaction_" + id,
+            o,
+          ]),
+        ),
+      },
+    });
     console.log(
       JSON.stringify({
         processed: predictions.length,
@@ -82,8 +108,15 @@ const report = {
   rubricVersion: behaviorVersion,
   model: "jev-1.13.0",
   datasetHash: hash,
-  dataType: "authored-synthetic",
-  independentAnnotation: false,
+  dataType: dataset?.dataType ?? "authored-synthetic",
+  independentAnnotation: dataset?.independentAnnotation ?? false,
+  annotationProvenance: dataset
+    ? {
+        reviewers: dataset.reviewers,
+        blindToPredictions: dataset.blindToPredictions,
+        adjudication: dataset.adjudication,
+      }
+    : null,
   frozenProfileId: JSON.parse(
     readFileSync("evaluation/frozen-profile.json", "utf8"),
   ).id,
@@ -127,11 +160,7 @@ console.log(
       missRate: report.overall.missRate,
       orderStability: report.overall.orderStability,
     },
-    baselineDelta:
-      baseline?.datasetHash === hash &&
-      baseline.rubricVersion !== behaviorVersion
-        ? report.holdout.agreement! - baseline.holdout.agreement
-        : null,
+    comparison: compareEvaluationReports(report, baseline),
     report: join(dir, "latest.json"),
   }),
 );

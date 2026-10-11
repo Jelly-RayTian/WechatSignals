@@ -34,7 +34,7 @@ export function evidenceCandidates(
               .slice(c.start, c.end)
               .map((m) => m.speaker + ": " + m.text)
               .join(" / ")
-              .slice(0, 60)
+              .slice(0, 40)
           : ""
       }`,
     ]),

@@ -9,7 +9,7 @@ export function hasBehaviorObservations(rows: AnalysisSegment[]) {
     rows.length > 0 &&
     rows.every(
       (s) =>
-        /^behavior-v[45678](?:-|$)/.test(s.result.rubricVersion ?? "") &&
+        /^behavior-v[456789](?:-|$)/.test(s.result.rubricVersion ?? "") &&
         Object.keys(behaviorDefinitions).every(
           (id) => s.result.behaviors?.[id],
         ),

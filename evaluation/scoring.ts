@@ -1,3 +1,4 @@
+import { interactionCriteria } from "../src/infrastructure/jev-interactions";
 import type { EvaluationCase } from "./corpus";
 export type Prediction = {
   id: string;
@@ -48,13 +49,36 @@ export function evaluatePredictions(
       const group = expected.join("|");
       confusion[group] ??= {};
       confusion[group][actual] = (confusion[group][actual] ?? 0) + 1;
-      if (expected.includes("absent")) {
+      if (expected.includes("absent") || expected.includes("not_observed")) {
         negativeLabels++;
-        if (["weak", "clear", "strong"].includes(actual)) falsePositive++;
+        if (
+          [
+            "weak",
+            "clear",
+            "strong",
+            "mutual",
+            "one_sided_me",
+            "one_sided_other",
+            "declined",
+          ].includes(actual)
+        )
+          falsePositive++;
       }
-      if (expected.every((v) => ["weak", "clear", "strong"].includes(v))) {
+      if (
+        expected.every((v) =>
+          [
+            "weak",
+            "clear",
+            "strong",
+            "mutual",
+            "one_sided_me",
+            "one_sided_other",
+            "declined",
+          ].includes(v),
+        )
+      ) {
         positiveLabels++;
-        if (actual === "absent") missed++;
+        if (actual === "absent" || actual === "not_observed") missed++;
       }
     }
     for (const o of Object.values(p.behaviors)) {
@@ -66,6 +90,7 @@ export function evaluatePredictions(
     rows.push({ id: c.id, category: c.category, mismatches });
   }
   return {
+    ...errorBreakdown(cases, predictions),
     calibration: evaluateCalibration(cases, predictions),
     cases: cases.length,
     failedCases,
@@ -92,7 +117,7 @@ function evaluateCalibration(
   cases: EvaluationCase[],
   predictions: Prediction[],
 ) {
-  const options = ["absent", "weak", "clear", "strong", "unclear"];
+  const behaviorOptions = ["absent", "weak", "clear", "strong", "unclear"];
   const byId = new Map(predictions.map((p) => [p.id, p]));
   let expectedExactLabels = 0,
     excludedSetValued = 0,
@@ -109,6 +134,9 @@ function evaluateCalibration(
   for (const c of cases) {
     const p = byId.get(c.id);
     for (const [id, expected] of Object.entries(c.expected)) {
+      const options = id.startsWith("interaction_")
+        ? Object.keys(interactionCriteria)
+        : behaviorOptions;
       if (expected.length !== 1) {
         excludedSetValued++;
         continue;
@@ -175,5 +203,91 @@ function evaluateCalibration(
         )
       : null,
     bins: reliability,
+  };
+}
+
+export function errorBreakdown(
+  cases: EvaluationCase[],
+  predictions: Prediction[],
+) {
+  const byId = new Map(predictions.map((p) => [p.id, p]));
+  const make = () => ({
+    labels: 0,
+    correct: 0,
+    falsePositive: 0,
+    negativeLabels: 0,
+    missed: 0,
+    positiveLabels: 0,
+    abstained: 0,
+    missing: 0,
+  });
+  const perBehavior: Record<string, ReturnType<typeof make>> = {};
+  const perCategory: Record<
+    string,
+    ReturnType<typeof make> & { cases: number; failedCases: number }
+  > = {};
+  let expectedLabels = 0,
+    successful = 0;
+  for (const c of cases) {
+    const p = byId.get(c.id),
+      failed = !p || !!p.error;
+    const category = (perCategory[c.category] ??= {
+      ...make(),
+      cases: 0,
+      failedCases: 0,
+    });
+    category.cases++;
+    if (failed) category.failedCases++;
+    else successful++;
+    for (const [id, expected] of Object.entries(c.expected)) {
+      expectedLabels++;
+      const group = (perBehavior[id] ??= make()),
+        actual = failed ? undefined : p.behaviors[id]?.choice;
+      for (const r of [group, category]) {
+        if (!actual) {
+          r.missing++;
+          continue;
+        }
+        r.labels++;
+        r.correct += Number(expected.includes(actual));
+        r.abstained += Number(actual === "unclear");
+        if (expected.includes("absent") || expected.includes("not_observed")) {
+          r.negativeLabels++;
+          r.falsePositive += Number(
+            [
+              "weak",
+              "clear",
+              "strong",
+              "mutual",
+              "one_sided_me",
+              "one_sided_other",
+              "declined",
+            ].includes(actual),
+          );
+        }
+        if (
+          expected.every((x) =>
+            [
+              "weak",
+              "clear",
+              "strong",
+              "mutual",
+              "one_sided_me",
+              "one_sided_other",
+              "declined",
+            ].includes(x),
+          )
+        ) {
+          r.positiveLabels++;
+          r.missed += Number(actual === "absent" || actual === "not_observed");
+        }
+      }
+    }
+  }
+  return {
+    expectedLabels,
+    coverage: cases.length ? successful / cases.length : null,
+    perBehavior,
+    perCategory,
   };
 }

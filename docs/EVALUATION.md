@@ -1,3 +1,17 @@
+# v9 当前评测状态（2026-10-11）
+
+v9 的对话单元、双向互动和媒体来源规则仍为 experimental-unvalidated。没有运行本轮付费 Jev 实测，不能沿用下方 v4 历史数字声称 v9 准确率。五项数值组合保持不变。
+
+`npm run evaluate:jev:v9` 仅离线清点 48 个作者编写案例：30 个原案例、6 个对象归属案例、12 个双向互动案例。新增案例全部属于已暴露开发样例，不能当独立盲测。加 `--live` 才会请求官方 Jev 并消耗额度；应用不会自动运行。
+
+外部数据：`npm run evaluate:jev -- --dataset /absolute/path/dataset.json`。JSON 包含 dataType（authored-synthetic 或 independent-deidentified）、reviewers（匿名校对者别名）、blindToPredictions、adjudication 和 cases。每例包含 id、split、category、reason、messages（speaker 只能 Me/Person A；text 必须去标识）、expected（行为 ID 或 interaction_invitation / interaction_support / interaction_affection 到可接受标签数组）。独立集要求两位校对者、盲于预测、分歧处理说明及 holdout；这些是提供方声明，工具无法证明独立性。基础敏感格式检查不能替代人工匿名审查。
+
+输出记录类别/行为误报漏报、弃权、缺失预测、运行覆盖和适用选项空间的校准指标。只有相同数据集 hash、相同模型且两次完整运行才给出匹配率差异；运行失败不能被忽略后算高准确率。
+
+v8 源码与清单保存在 evaluation/profiles/v8-source 和对应 manifest。v9 清单记录新的分段与语义题变化；旧分析不会被重写，新字段仅在用户再次手动分析时生成。
+
+---
+
 ## 2026-10-08：好感分层版 v5
 
 本轮重点解决 v4 将关心和共同活动直接作为好感主分的问题。官方接口仍使用 Choice，12项行为题、10项证据定位题；未加入其他模型，未自动发送真实聊天。

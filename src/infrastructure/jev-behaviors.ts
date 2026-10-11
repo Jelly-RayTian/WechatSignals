@@ -4,7 +4,7 @@ import {
   type MetricResult,
   type Analysis,
 } from "../domain/types";
-export const behaviorVersion = "behavior-v8-target-context";
+export const behaviorVersion = "behavior-v9-dialogue-context";
 export const behaviorDefinitions = {
   personal_care: {
     label: "具体关心",

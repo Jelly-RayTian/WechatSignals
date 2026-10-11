@@ -45,6 +45,7 @@ function answers(): Record<string, any> {
   obs.boundary = observations("absent").boundary;
   obs.transaction = observations("absent").transaction;
   return {
+    ...Object.fromEntries(["invitation","support","affection"].map(id => ["interaction_"+id,{type:"choice",choice:"unclear",confidence:0.9,probabilities:{mutual:0,one_sided_me:0,one_sided_other:0,declined:0,not_observed:0,unclear:1}}])),
     ...Object.fromEntries(
       Object.entries(obs).map(([id, v]) => [id, { type: "choice", ...v }]),
     ),
@@ -144,7 +145,7 @@ test("production Jev evaluates 12 literal behaviors plus evidence, does not gate
   const req = buildRequest(state);
   assert.equal(
     Object.values(req.questions).filter((q) => q.type === "choice").length,
-    22,
+    25,
   );
   assert.ok(req.questions.personal_care.instructions.includes("Person A"));
   assert.ok(Object.keys(req.questions).includes("boundary"));
@@ -163,7 +164,7 @@ test("production Jev evaluates 12 literal behaviors plus evidence, does not gate
 });
 test("optional same-request reversed choices record disagreement without overwriting first judgment", async () => {
   const req = buildRequest(state, "jev-latest", true);
-  assert.equal(Object.keys(req.questions).length, 34);
+  assert.equal(Object.keys(req.questions).length, 37);
   assert.notDeepEqual(
     Object.keys(req.questions.personal_care.criteria),
     Object.keys(req.questions.personal_care_check.criteria),
@@ -280,12 +281,12 @@ test("production v4 application sends nothing until confirmed and persists zero-
         id,
         {
           type: "choice",
-          choice: !(id in behaviorDefinitions) ? "none" : "absent",
+          choice: id.startsWith("interaction_") ? "not_observed" : !(id in behaviorDefinitions) ? "none" : "absent",
           confidence: 0.9,
           probabilities: Object.fromEntries(
             Object.keys(q.criteria).map((k) => [
               k,
-              k === (!(id in behaviorDefinitions) ? "none" : "absent") ? 1 : 0,
+              k === (id.startsWith("interaction_") ? "not_observed" : !(id in behaviorDefinitions) ? "none" : "absent") ? 1 : 0,
             ]),
           ),
         },

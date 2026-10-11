@@ -7,6 +7,7 @@ export function sanitize(
 ): Preview & {
   truncated: number;
   timestamps: number[];
+  messageIds: string[];
   modalities: Record<string, number>;
 } {
   const aliases = contacts
@@ -25,6 +26,7 @@ export function sanitize(
   let omitted = 0;
   let truncated = 0;
   const timestamps: number[] = [];
+  const messageIds: string[] = [];
   let semanticCount = 0;
   const modalities: Record<string, number> = {};
   const replacements = new Map(
@@ -56,11 +58,11 @@ export function sanitize(
           ? m.text
           : m.kind === "voice"
             ? m.transcript
-              ? `[语音自动转写，可能有误；不含语气] ${m.transcript}`
+              ? `[语音${m.transcriptReviewed ? "人工核对" : "自动转写，可能有误"}；不含语气] ${m.transcript}`
               : "[语音缺失或未转写；内容未知]"
             : m.kind === "image"
               ? m.media?.status === "recognized"
-                ? `[图片OCR；可能有误；属于图片内文字，不是发送者陈述] ${m.media.text}`
+                ? `[图片OCR；${m.media.reviewed ? "人工核对" : "可能有误"}；属于图片内文字，不是发送者陈述] ${m.media.text}`
                 : "[图片内容未知；未获得可用文字，不能推断画面]"
               : m.kind === "emoji"
                 ? "[表情贴图；画面含义未知，不能推断情绪或暧昧]"
@@ -99,6 +101,7 @@ export function sanitize(
       if (!hasContent)
         modalities.unknown_content = (modalities.unknown_content ?? 0) + 1;
       timestamps.push(m.timestamp);
+      messageIds.push(m.id);
       return {
         speaker: m.sender === "me" ? "Me" : "Person A",
         text: text.slice(0, 2000),
@@ -122,5 +125,6 @@ export function sanitize(
     truncated,
     modalities,
     timestamps,
+    messageIds,
   };
 }

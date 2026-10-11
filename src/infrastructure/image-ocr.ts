@@ -13,6 +13,61 @@ import { join } from "node:path";
 import { z } from "zod";
 import type { MediaObservation, Message, WechatReader } from "../domain/types";
 
+// A bounded allowlist of coarse objects only. No identity/emotion/relationship labels.
+const coarseLabels = new Set([
+  "food",
+  "drink",
+  "dessert",
+  "fruit",
+  "flower",
+  "plant",
+  "cat",
+  "dog",
+  "animal",
+  "landscape",
+  "sky",
+  "beach",
+  "mountain",
+  "building",
+  "vehicle",
+  "car",
+  "book",
+  "document",
+  "text",
+  "screenshot",
+]);
+export function parseVisionObservation(raw: unknown): MediaObservation {
+  const result = z
+    .object({
+      text: z.string().max(10000),
+      confidence: z.number().min(0).max(1),
+      labels: z
+        .array(
+          z.object({
+            name: z.string().max(100),
+            confidence: z.number().min(0).max(1),
+          }),
+        )
+        .max(20)
+        .optional(),
+      width: z.number().int().positive().optional(),
+      height: z.number().int().positive().optional(),
+      frameCount: z.number().int().positive().optional(),
+      barcodeCount: z.number().int().min(0).max(10000).optional(),
+      classificationAvailable: z.boolean().optional(),
+    })
+    .parse(raw);
+  return {
+    ...result,
+    version: "vision-local-v2",
+    status: result.text.trim() ? "recognized" : "no_text",
+    text: result.text.trim(),
+    labels: (result.labels ?? [])
+      .filter((l) => coarseLabels.has(l.name) && l.confidence >= 0.7)
+      .slice(0, 5),
+  };
+}
+
 export interface ImageRecognizer {
   recognize(
     reader: WechatReader,
@@ -98,18 +153,7 @@ export class LocalImageRecognizer implements ImageRecognizer {
           },
         );
       });
-      const result = z
-        .object({
-          text: z.string().max(10000),
-          confidence: z.number().min(0).max(1),
-        })
-        .parse(JSON.parse(raw));
-      return {
-        version: "vision-ocr-v1",
-        status: result.text.trim() ? "recognized" : "no_text",
-        text: result.text.trim(),
-        confidence: result.confidence,
-      };
+      return parseVisionObservation(JSON.parse(raw));
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
