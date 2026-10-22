@@ -1,3 +1,4 @@
+import { MessageBrowser } from "./message-browser";
 import { ImageObservation } from "./image-observation";
 import { CoveragePanel, InteractionPanel } from "./insights";
 import { MetricReport } from "./report";
@@ -132,6 +133,7 @@ function App() {
       previous?.focus();
     };
   }, [settings, !!editing, !!plan, !!connection, !!evidenceContext]);
+  const [messageRevision, setMessageRevision] = useState(0);
   const selection = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmounted = useRef(false);
@@ -780,7 +782,11 @@ function App() {
               <p>当前没有真实数据，因此图表和 AI 分数保持空白。</p>
             </div>
           ) : tab === "report" ? (
-            <MetricReport view={view} onOpenContext={openContext} />
+            <MetricReport
+              key={view.conversation.id + (view.analysis?.id ?? "")}
+              view={view}
+              onOpenContext={openContext}
+            />
           ) : tab === "charts" ? (
             <>
               <CoveragePanel view={view} />
@@ -791,89 +797,92 @@ function App() {
           ) : tab === "signals" ? (
             <SignalTrend view={view} />
           ) : (
-            <>
-              <p className="note">
-                统计覆盖已读 {view.coverage?.count} 条；聊天面板仅渲染最新{" "}
-                {view.messages.length} 条以保持流畅。
-              </p>
-              <div className="messages">
-                {view.messages.map((m) => (
-                  <div key={m.id} className={"message " + m.sender}>
-                    <small>
-                      {m.sender === "me"
-                        ? "我"
-                        : m.sender === "other"
-                          ? "对方"
-                          : "未知发送者"}{" "}
-                      · {new Date(m.timestamp * 1000).toLocaleString()}
-                    </small>
-                    <p>
-                      {m.kind === "voice" && m.transcript
-                        ? m.transcript
-                        : m.text}
-                    </p>
-                    {m.kind === "image" && (
-                      <div>
-                        <ImageObservation media={m.media} />
+            <MessageBrowser
+              key={
+                view.conversation.id +
+                ":" +
+                view.coverage?.range.since +
+                ":" +
+                view.coverage?.range.until
+              }
+              conversationId={view.conversation.id}
+              coverage={view.coverage}
+              revision={`${view.coverage?.count}:${view.contentCoverage?.transcribed}:${view.contentCoverage?.imageOcr}:${messageRevision}`}
+              search={api!.searchMessages}
+              renderMessage={(m) => (
+                <div key={m.id} className={"message " + m.sender}>
+                  <small>
+                    {m.sender === "me"
+                      ? "我"
+                      : m.sender === "other"
+                        ? "对方"
+                        : "未知发送者"}{" "}
+                    · {new Date(m.timestamp * 1000).toLocaleString()}
+                  </small>
+                  <p>
+                    {m.kind === "voice" && m.transcript ? m.transcript : m.text}
+                  </p>
+                  {m.kind === "image" && (
+                    <div>
+                      <ImageObservation media={m.media} />
+                      <button
+                        disabled={locked}
+                        onClick={() =>
+                          setEditing({
+                            id: m.id,
+                            text: m.media?.text ?? "",
+                            kind: "image",
+                          })
+                        }
+                      >
+                        检查 / 编辑图片文字
+                      </button>
+                    </div>
+                  )}
+                  {m.kind === "voice" && (
+                    <div className="voice-tools">
+                      {!m.transcript && (
                         <button
-                          disabled={locked}
+                          disabled={locked || background?.state === "running"}
                           onClick={() =>
-                            setEditing({
-                              id: m.id,
-                              text: m.media?.text ?? "",
-                              kind: "image",
+                            run(async () => {
+                              setPlan(null);
+                              const next = await api!.startTranscription(
+                                selected,
+                                m.id,
+                                speechMode,
+                                speechConcurrency,
+                              );
+                              setJob(next);
+                              watch(next.id, selection.current);
                             })
                           }
                         >
-                          检查 / 编辑图片文字
+                          转写这条
                         </button>
-                      </div>
-                    )}
-                    {m.kind === "voice" && (
-                      <div className="voice-tools">
-                        {!m.transcript && (
-                          <button
-                            disabled={locked || background?.state === "running"}
-                            onClick={() =>
-                              run(async () => {
-                                setPlan(null);
-                                const next = await api!.startTranscription(
-                                  selected,
-                                  m.id,
-                                  speechMode,
-                                  speechConcurrency,
-                                );
-                                setJob(next);
-                                watch(next.id, selection.current);
-                              })
-                            }
-                          >
-                            转写这条
-                          </button>
-                        )}
-                        <small>
-                          {m.transcript
-                            ? m.transcriptReviewed
-                              ? "文字已人工核对 · 无语气信息"
-                              : "语音自动转写 · 无可信度标注，请核对"
-                            : m.voiceError
-                              ? voiceErrorLabels[m.voiceError]
-                              : "未转写 · 不参与 AI 语义分析"}
-                        </small>
-                        <button
-                          disabled={locked}
-                          onClick={() =>
-                            setEditing({ id: m.id, text: m.transcript || "" })
-                          }
-                        >
-                          检查 / 编辑文字
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </>
+                      )}
+                      <small>
+                        {m.transcript
+                          ? m.transcriptReviewed
+                            ? "文字已人工核对 · 无语气信息"
+                            : "语音自动转写 · 无可信度标注，请核对"
+                          : m.voiceError
+                            ? voiceErrorLabels[m.voiceError]
+                            : "未转写 · 不参与 AI 语义分析"}
+                      </small>
+                      <button
+                        disabled={locked}
+                        onClick={() =>
+                          setEditing({ id: m.id, text: m.transcript || "" })
+                        }
+                      >
+                        检查 / 编辑文字
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            />
           )}
         </article>
       </main>
@@ -1335,6 +1344,7 @@ function App() {
                     )(selected, editing.id, editing.text),
                   );
                   setPlan(null);
+                  setMessageRevision((n) => n + 1);
                   setEditing(null);
                 })
               }

@@ -199,7 +199,21 @@ export type View = {
   };
 };
 export type Preview = { state: string; messageCount: number; omitted: number };
+export type MessageSearchQuery = {
+  text?: string;
+  sender?: Message["sender"] | "all";
+  kind?: Message["kind"] | "all";
+  offset?: number;
+};
+export type MessageSearchResult = {
+  messages: Message[];
+  total: number;
+  scanned: number;
+  offset: number;
+  limit: number;
+};
 export interface DesktopApi {
+  searchMessages(id: string, query: MessageSearchQuery): Promise<MessageSearchResult>;
   evidenceContext(id: string, analysisId: string, segment: number, metric: Metric, side: "support" | "counter"): Promise<EvidenceContext>;
   editImageText(id: string, messageId: string, text: string): Promise<View>;
   evaluationReport(): Promise<EvaluationSummary | null>;

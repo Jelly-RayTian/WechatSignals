@@ -182,6 +182,7 @@ app
       pauseBackground: () => background.stop(),
       resumeBackground: () => background.resume(),
       refreshView: (id) => service.refreshView(validId(id)),
+      searchMessages: (id, query) => service.searchMessages(validId(id), query as import("../domain/types").MessageSearchQuery),
       status: () => service.status(),
       connection: () => service.connection(),
       openWechatSetup: async () => {

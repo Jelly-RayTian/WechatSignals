@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { ReportStatus } from "./report-status";
 import {
   CoveragePanel,
   InteractionPanel,
@@ -81,6 +82,7 @@ export function MetricReport({
         </span>
       </div>
       <p className="note">这些分数反映聊天行为信号，不代表对方真实心理状态。</p>
+      <ReportStatus view={view} />
       <details className="report-methods">
         <summary>评分依据与版本说明 · 实验性指数</summary>
         {analysis && (

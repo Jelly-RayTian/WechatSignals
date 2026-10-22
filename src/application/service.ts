@@ -1,5 +1,6 @@
 import { dialogueInteractions } from "./dialogue-interactions";
 import { locateEvidence } from "./evidence-context";
+import { searchLoadedMessages } from "./message-search";
 import type { ImageRecognizer } from "../infrastructure/image-ocr";
 import { availableParallelism } from "node:os";
 import { VoiceError } from "../domain/voice-errors";
@@ -145,8 +146,14 @@ export class ApplicationService {
   refreshView(id: string) {
     return this.loaded.has(id) ? this.view(id) : null;
   }
-  private view(id: string): View {
-    const data = this.loaded.get(id)!;
+  searchMessages(id: string, query: import("../domain/types").MessageSearchQuery) {
+    this.selected(id);
+    const data = this.loaded.get(id);
+    if (!data) throw new Error("请先读取本机会话范围");
+    this.hydrateMessages(data);
+    return searchLoadedMessages(data.messages, query);
+  }
+  private hydrateMessages(data: Loaded) {
     for (const m of data.messages) {
       if (m.kind === "image" && !m.media)
         m.media = this.repo.getMedia?.(m.id) ?? undefined;
@@ -159,6 +166,10 @@ export class ApplicationService {
         }
       }
     }
+  }
+  private view(id: string): View {
+    const data = this.loaded.get(id)!;
+    this.hydrateMessages(data);
     let analysis: Analysis | null = null;
     try {
       const saved = this.repo.latest(id);

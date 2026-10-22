@@ -1280,3 +1280,120 @@ input::placeholder {
     grid-template-columns: 1fr;
   }
 }
+
+/* Local history workspace: compact controls, explicit range, bounded rendering. */
+.message-search-toolbar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 18px 0 14px;
+}
+.message-search-toolbar label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.message-search-toolbar input,
+.message-search-toolbar select {
+  padding: 9px 11px;
+  height: 38px;
+}
+.message-query {
+  flex: 1;
+  min-width: 230px;
+}
+.message-query input {
+  width: 100%;
+}
+.message-scope {
+  padding: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.message-scope p {
+  margin: 0 0 4px;
+}
+.message-incomplete {
+  color: var(--danger);
+}
+.message-result-bar {
+  padding: 10px 0 18px;
+  border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.message-browser .message {
+  width: min(90%, 760px);
+  padding: 15px 18px;
+}
+.message-browser .message p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.message-browser .message small {
+  display: block;
+}
+.message-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 24px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.message-pagination span {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.message-search-loading {
+  min-height: 180px;
+  padding: 20px;
+}
+.report-status {
+  border-left: 3px solid var(--accent);
+  background: var(--subtle);
+  padding: 16px 20px;
+  margin: 16px 0 20px;
+  border-radius: 0 8px 8px 0;
+}
+.report-status p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.report-status dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+  margin: 14px 0 0;
+}
+.report-status dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+.report-status dd {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.report-status-partial,
+.report-status-different-range,
+.report-status-different-content {
+  border-left-color: var(--danger);
+}
+@media (max-width: 1000px) {
+  .message-query {
+    flex-basis: 100%;
+  }
+  .message-pagination {
+    flex-wrap: wrap;
+  }
+  .message-browser .message {
+    width: 100%;
+    max-width: 100%;
+  }
+}

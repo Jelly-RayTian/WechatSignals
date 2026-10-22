@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("wechat", {
+  searchMessages: (id: string, query: unknown) => ipcRenderer.invoke("searchMessages", id, query),
   evidenceContext: (id:string, analysisId:string, segment:number, metric:string, side:string) => ipcRenderer.invoke("evidenceContext",id,analysisId,segment,metric,side),
   editImageText: (id:string,messageId:string,text:string) => ipcRenderer.invoke("editImageText",id,messageId,text),
   evaluationReport: () => ipcRenderer.invoke("evaluationReport"),
