@@ -1,6 +1,7 @@
 # Dependencies and generated builds
 node_modules/
 dist/
+release/
 .DS_Store
 native/keychain-helper
 native/image-ocr

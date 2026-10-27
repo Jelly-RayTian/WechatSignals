@@ -1,5 +1,8 @@
 # 微信聊天信号 / WechatSignals
 
+
+**macOS 安装版：[v0.1.0-beta.1 下载](https://github.com/Jelly-RayTian/WechatSignals/releases/tag/v0.1.0-beta.1)** · Apple Silicon · 系统目标 macOS 14+。独立运行，无需 Node.js。此测试版未公证，首次打开说明与限制见 [安装说明](packaging/INSTALL-zh.md)。
+
 macOS 本地优先、只读、单聊分析客户端。本机真实单聊读取和本地语音转写已验证；官方 Jev 在线请求仍须用户主动确认，尚未用真实聊天验证。
 
 ## 启动

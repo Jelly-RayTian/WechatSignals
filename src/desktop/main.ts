@@ -22,6 +22,8 @@ import { voiceMaterializer } from "../infrastructure/greenbubbles-voice";
 import { LocalSpeechTranscriber } from "../infrastructure/speech";
 if (process.env.WECHAT_SIGNALS_TEST_DATA_DIR)
   app.setPath("userData", process.env.WECHAT_SIGNALS_TEST_DATA_DIR);
+else if (app.isPackaged)
+  app.setPath("userData", join(app.getPath("appData"), "wechat-signals"));
 app
   .whenReady()
   .then(async () => {
