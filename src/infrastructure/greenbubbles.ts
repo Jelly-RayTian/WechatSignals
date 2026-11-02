@@ -36,7 +36,7 @@ export function createGreenBubblesRunner(
 }
 class ReaderError extends Error {
   constructor(public code: string) {
-    super("GreenBubbles 无法读取：检查安装、数据库密钥与兼容性。");
+    super(code === "source_changed" ? "微信账号或数据源已改变，请重启应用以避免混合记录。" : "GreenBubbles 无法读取：检查安装、数据库密钥与兼容性。");
   }
 }
 const contact = z.object({
@@ -82,8 +82,9 @@ export class GreenBubblesAdapter implements WechatReader {
   private sourceIdentity: string | null = null;
   private verifySource(identity: string) {
     if (this.sourceIdentity && this.sourceIdentity !== identity)
-      throw new Error("微信账号或数据源已改变，请重启应用以避免混合记录");
-    this.guardSource(identity);
+      throw new ReaderError("source_changed");
+    try { this.guardSource(identity); }
+    catch { throw new ReaderError("source_changed"); }
     this.sourceIdentity = identity;
   }
   constructor(
@@ -148,7 +149,9 @@ export class GreenBubblesAdapter implements WechatReader {
         readable: false,
         code: error instanceof ReaderError ? error.code : "reader_unavailable",
         detail:
-          error instanceof ReaderError && error.code === "invalidProfile"
+          error instanceof ReaderError && error.code === "source_changed"
+            ? "微信数据源与缓存绑定不同。请重启客户端，为当前数据源建立独立缓存；旧记录保留，不需要重签微信。"
+            : error instanceof ReaderError && error.code === "invalidProfile"
             ? "GreenBubbles 已安装；微信数据库配置或凭据未就绪（invalidProfile）。请按官方指南完成本机设置。"
             : "未能打开 GreenBubbles 数据源。请检查 CLI、配置和本机密钥设置。",
       };

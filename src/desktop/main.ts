@@ -1,4 +1,5 @@
 import { LocalImageRecognizer } from "../infrastructure/image-ocr";
+import { repositoryPathForSource } from "../infrastructure/source-cache";
 import { settingsSchema } from "../domain/settings";
 import { BackgroundSpeech } from "../application/background-speech";
 import { z } from "zod";
@@ -7,7 +8,7 @@ import {
   createPreflightProbe,
 } from "../plugins/greenbubbles-plugin";
 import { app, BrowserWindow, ipcMain, shell } from "electron";
-import { join } from "node:path";
+import { join, dirname, basename } from "node:path";
 import { readFile } from "node:fs/promises";
 import { behaviorDefinitions } from "../infrastructure/jev-behaviors";
 import { ApplicationService } from "../application/service";
@@ -32,16 +33,24 @@ app
     const keychain = new KeychainStore(
       join(app.getAppPath(), "native/keychain-helper"),
     );
+    const readerRunner = createGreenBubblesRunner(
+      process.env.GREENBUBBLES_BIN || join(app.getAppPath(), "vendor/greenbubbles/greenbubbles"),
+    );
+    let identity: string | undefined;
+    try {
+      const source = z.object({ok:z.literal(true),source:z.object({identity:z.string().min(1).max(4096)})}).parse(JSON.parse(await readerRunner(["source","status"])));
+      identity = source.source.identity;
+    } catch { /* Offline detection must not replace or rebind existing caches. */ }
+    const defaultCache = join(app.getPath("userData"), "store", "signals.sqlite");
+    const cachePath = await repositoryPathForSource(defaultCache, identity, join(__dirname,"sql-wasm.wasm"));
+    const isolatedSource = cachePath !== defaultCache;
     const repo = await SqliteRepository.open(
-      join(app.getPath("userData"), "store", "signals.sqlite"),
+      cachePath,
       join(__dirname, "sql-wasm.wasm"),
-      join(app.getPath("desktop"), "微信语音转写"),
+      isolatedSource ? join(app.getPath("desktop"), "微信语音转写", basename(dirname(cachePath))) : join(app.getPath("desktop"), "微信语音转写"),
     );
     const reader = new GreenBubblesAdapter(
-      createGreenBubblesRunner(
-        process.env.GREENBUBBLES_BIN ||
-          join(app.getAppPath(), "vendor/greenbubbles/greenbubbles"),
-      ),
+      readerRunner,
       (identity) => repo.bindSource(identity),
       voiceMaterializer(
         join(app.getAppPath(), "vendor/greenbubbles/greenbubbles"),
@@ -185,7 +194,11 @@ app
       resumeBackground: () => background.resume(),
       refreshView: (id) => service.refreshView(validId(id)),
       searchMessages: (id, query) => service.searchMessages(validId(id), query as import("../domain/types").MessageSearchQuery),
-      status: () => service.status(),
+      status: async () => {
+        const status = await service.status();
+        if (status.readable && isolatedSource) status.detail += " 当前数据源使用独立缓存；旧缓存和分析已保留，不会混合。";
+        return status;
+      },
       connection: () => service.connection(),
       openWechatSetup: async () => {
         const error = await shell.openPath(
